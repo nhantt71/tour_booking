@@ -1,9 +1,8 @@
 package com.project17.tourbooking.activities.pay
 
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import android.os.Build
+import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,9 +22,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -36,65 +40,159 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
-import com.google.type.DateTime
+import coil.compose.rememberImagePainter
 import com.project17.tourbooking.R
+import com.project17.tourbooking.navigates.NavigationItems
 import com.project17.tourbooking.ui.theme.BlackDark900
 import com.project17.tourbooking.ui.theme.BlackLight300
 import com.project17.tourbooking.ui.theme.BlackWhite0
-import com.project17.tourbooking.ui.theme.BrandDark800
 import com.project17.tourbooking.ui.theme.BrandDefault500
-import com.project17.tourbooking.ui.theme.InformationDark600
 import com.project17.tourbooking.ui.theme.InformationDefault500
-import com.project17.tourbooking.ui.theme.InformationLight100
-import com.project17.tourbooking.ui.theme.InformationLight200
-import com.project17.tourbooking.ui.theme.InformationLight300
 import com.project17.tourbooking.ui.theme.InformationLight400
 import com.project17.tourbooking.ui.theme.SuccessDefault500
 import com.project17.tourbooking.ui.theme.TourBookingTheme
 import com.project17.tourbooking.ui.theme.Typography
-import java.time.LocalDateTime
+import com.project17.tourbooking.utils.AuthState
+import com.project17.tourbooking.utils.AuthViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class BookingSuccessActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            TourBookingTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    BookingSuccessScreen(modifier = Modifier.padding(innerPadding))
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+fun BookingSuccessScreen(
+    modifier: Modifier = Modifier,
+    navController: NavHostController = rememberNavController(),
+    billId: String,
+    authViewModel: AuthViewModel
+) {
+    val authState = authViewModel.authState.observeAsState()
+    var name by remember { mutableStateOf<String?>(null) }
+    var email by remember { mutableStateOf<String?>(null) }
+    var totalAmount by remember { mutableStateOf(0) }
+    var quantity by remember { mutableStateOf(0) }
+
+    LaunchedEffect(authState.value) {
+        when (authState.value) {
+            is AuthState.Authenticated -> {
+                val currentUser = authViewModel.auth.currentUser
+                val currentEmail = currentUser?.email
+
+                email = currentEmail
+
+                if (currentEmail != null) {
+                    FirestoreHelper.getCustomerByEmail(currentEmail) { customer ->
+                        customer?.let {
+                            name = it.fullName
+                        }
+                    }
+
+                    // Fetch Bill and BillDetail information
+                    FirestoreHelper.getBillById(billId) { bill ->
+                        bill?.let {
+                            totalAmount = it.totalAmount.toInt()
+                        }
+                    }
+
+                    FirestoreHelper.getBillDetailByBillId(billId) { billDetail ->
+                        billDetail?.let {
+                            quantity = it.quantity
+                        }
+                    }
                 }
             }
+
+            is AuthState.Error -> {
+                val errorMessage = (authState.value as AuthState.Error).message
+                Log.e("HeaderSection", errorMessage)
+            }
+
+            is AuthState.Unauthenticated -> {
+                navController.navigate(NavigationItems.Login.route)
+            }
+
+            else -> Unit
         }
     }
-}
 
-@Composable
-fun BookingSuccessScreen( modifier: Modifier = Modifier, navController: NavHostController = rememberNavController()){
-    Box(Modifier.fillMaxSize()){
-        Column(modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())){
+    // UI content as before
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             HeaderSection(navController)
             OrderPlacedSuccessSection()
             Spacer(modifier = Modifier.height(16.dp))
-            Spacer(modifier = Modifier
-                .height(1.dp)
-                .fillMaxWidth()
-                .background(BlackLight300))
-            Spacer(modifier = Modifier.height(16.dp))
-            OrderPlacedInformationSection(
-                personResponsibleName = "Pristina",
-                contactInfo = "example@gmail.com",
-                LocalDateTime.now(),
-                quantity = 3,
-                totalPrice = 100000
+            Spacer(
+                modifier = Modifier
+                    .height(1.dp)
+                    .fillMaxWidth()
+                    .background(BlackLight300)
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            name?.let {
+                email?.let { emailValue ->
+                    OrderPlacedInformationSection(
+                        personResponsibleName = it,
+                        contactInfo = emailValue,
+                        placedOrderTime = Date(),
+                        quantity = quantity,
+                        totalPrice = totalAmount
+                    )
+                }
+            }
         }
 
         FooterSection(
             onBackToHomeClick = { backToHomeAndPopAllInBackStack(navController) },
+            onViewYourTripClick = { navController.navigate(NavigationItems.TripBookedDetail.route + "/$billId") },
             modifier = Modifier.align(Alignment.BottomStart)
+        )
+    }
+}
+
+
+@Composable
+fun TourInformationSection(
+    image: String,
+    name: String,
+    destination: String,
+    startDate: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth()) {
+        Image(
+            painter = rememberImagePainter(image),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = name,
+            style = Typography.headlineMedium,
+            color = BlackDark900,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = destination,
+            style = Typography.bodyMedium,
+            color = BlackLight300,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Start Date: $startDate",
+            style = Typography.bodyMedium,
+            color = BlackLight300,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
@@ -140,11 +238,11 @@ fun OrderPlacedSuccessSection(){
 fun OrderPlacedInformationSection(
     personResponsibleName: String,
     contactInfo: String,
-    placedOrderTime: LocalDateTime,
+    placedOrderTime: Date,
     quantity: Int,
     totalPrice: Int,
     modifier: Modifier = Modifier
-){
+) {
     Column(modifier.fillMaxWidth()) {
         Text(
             text = stringResource(id = R.string.order_placed_information_text),
@@ -164,15 +262,9 @@ fun OrderPlacedInformationSection(
         Spacer(modifier = Modifier
             .fillMaxWidth()
             .height(8.dp))
-        val formattedOrderTime = String.format(
-            "%02d-%02d-%04d %02d:%02d:%02d",
-            placedOrderTime.dayOfMonth,
-            placedOrderTime.monthValue,
-            placedOrderTime.year,
-            placedOrderTime.hour,
-            placedOrderTime.minute,
-            placedOrderTime.second
-        )
+
+        val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.getDefault())
+        val formattedOrderTime = dateFormat.format(placedOrderTime)
         PlaceOrderInformationLine(R.string.placed_order_time_text, formattedOrderTime)
         Spacer(modifier = Modifier
             .fillMaxWidth()
@@ -250,10 +342,3 @@ fun FooterSection(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun BookingSuccessPreview() {
-    TourBookingTheme{
-        BookingSuccessScreen()
-    }
-}

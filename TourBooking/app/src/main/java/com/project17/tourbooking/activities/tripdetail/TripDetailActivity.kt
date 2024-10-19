@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.project17.tourbooking.R
@@ -69,6 +71,7 @@ import com.project17.tourbooking.ui.theme.ErrorDefault500
 import com.project17.tourbooking.ui.theme.TourBookingTheme
 import com.project17.tourbooking.ui.theme.Typography
 import com.project17.tourbooking.utils.AddToWishList
+import com.project17.tourbooking.utils.AuthState
 import com.project17.tourbooking.utils.AuthViewModel
 import com.project17.tourbooking.utils.CategoryItem
 import com.project17.tourbooking.utils.ReviewItem
@@ -85,6 +88,7 @@ import com.project17.tourbooking.utils.toAddWishListIcon3x
 fun TripDetailScreen(navController: NavHostController = rememberNavController(), tourId: String) {
     val tourState = remember { mutableStateOf<Tour?>(null) }
     val context = LocalContext.current
+    val authViewModel: AuthViewModel = viewModel() // Obtain the AuthViewModel instance
 
     LaunchedEffect(tourId) {
         if (tourId.isNotEmpty()) {
@@ -96,20 +100,18 @@ fun TripDetailScreen(navController: NavHostController = rememberNavController(),
 
     val tour = tourState.value
 
-    if(tour != null){
-    }
     Box(
         Modifier
             .fillMaxSize()
-    ){
+    ) {
         Column(
             Modifier
                 .fillMaxSize()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
-        ){
+        ) {
             if (tour != null) {
-                NavBarSection(tour)
+                NavBarSection(tour, navController)
             }
             Spacer(modifier = Modifier.height(32.dp))
             if (tour != null) {
@@ -132,10 +134,15 @@ fun TripDetailScreen(navController: NavHostController = rememberNavController(),
             FooterSection(
                 tour = tour,
                 modifier = Modifier.align(Alignment.BottomStart),
-                onBookingButtonClick = {navController.navigate(NavigationItems.BookingDetail.route + "/${tourId}")})
+                onBookingButtonClick = { navController.navigate(NavigationItems.BookingDetail.route + "/${tourId}") },
+                navController = navController,
+                tourId = tourId,
+                authViewModel = authViewModel // Pass AuthViewModel instance
+            )
         }
     }
 }
+
 
 @Composable
 fun CategoryListSection(tour: Tour) {
@@ -179,7 +186,7 @@ fun AboutTripSection(tour: Tour){
 fun ReviewSection(tour: Tour) {
     val reviews = remember { mutableStateListOf<Review>() }
     val toursWithIds = remember { mutableStateListOf<TourWithId>() }
-    var averageRating by remember { mutableStateOf(0.0) }
+    var averageRating by remember { mutableDoubleStateOf(0.0) }
 
     LaunchedEffect(Unit) {
         val loadedToursWithIds = FirestoreHelper.loadToursWithIds()
@@ -236,7 +243,7 @@ fun ReviewSection(tour: Tour) {
 @Composable
 fun NavBarSection(
     tour: Tour,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController
 ){
     Row(
         Modifier
@@ -273,17 +280,24 @@ fun NavBarSection(
 
 
 @Composable
-fun FooterSection(tour: Tour,  modifier: Modifier, onBookingButtonClick:() -> Unit) {
+fun FooterSection(
+    tour: Tour,
+    modifier: Modifier,
+    onBookingButtonClick: (String) -> Unit,
+    navController: NavHostController,
+    tourId: String,
+    authViewModel: AuthViewModel // Pass AuthViewModel as parameter
+) {
+    val authState by authViewModel.authState.observeAsState(AuthState.Unauthenticated)
+    val isAuthenticated = authState is AuthState.Authenticated
     val toursWithIds = remember { mutableStateListOf<TourWithId>() }
     val ticket = remember { mutableStateListOf<Ticket?>() }
-    val price = remember { mutableDoubleStateOf(0.0) }
 
     LaunchedEffect(tour) {
         val loadedToursWithIds = FirestoreHelper.loadToursWithIds()
         toursWithIds.clear()
         toursWithIds.addAll(loadedToursWithIds)
 
-        Log.d("FooterSection", "Loaded tours with IDs: $toursWithIds")
         val tourWithId = toursWithIds.find { it.tour == tour }
         if (tourWithId != null) {
             val loadedTickets = FirestoreHelper.loadTicketForTour(tourWithId.id)
@@ -291,6 +305,7 @@ fun FooterSection(tour: Tour,  modifier: Modifier, onBookingButtonClick:() -> Un
             ticket.addAll(loadedTickets)
         }
     }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -318,7 +333,13 @@ fun FooterSection(tour: Tour,  modifier: Modifier, onBookingButtonClick:() -> Un
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
-                onClick = { onBookingButtonClick()},
+                onClick = {
+                    if (isAuthenticated) {
+                        onBookingButtonClick(tourId)
+                    } else {
+                        navController.navigate(NavigationItems.Login.route)
+                    }
+                },
                 colors = ButtonColors(BrandDefault500, BlackDark900, BrandDefault500, BlackDark900),
                 modifier = Modifier
                     .width(150.dp)

@@ -70,6 +70,7 @@ import com.project17.tourbooking.ui.theme.Typography
 import com.project17.tourbooking.utils.AlertDialogUtil
 import com.project17.tourbooking.models.Category
 import com.project17.tourbooking.models.Tour
+import com.project17.tourbooking.models.TourWithId
 import com.project17.tourbooking.utils.AuthState
 import com.project17.tourbooking.utils.AuthViewModel
 import com.project17.tourbooking.utils.CategoryItem
@@ -186,7 +187,7 @@ fun HeaderSection(
                 Log.e("HeaderSection", errorMessage)
             }
             is AuthState.Unauthenticated -> {
-                navController.navigate("login")
+
             }
             else -> Unit
         }
@@ -338,7 +339,7 @@ fun ChooseCategorySection(modifier: Modifier = Modifier, navController: NavHostC
         if (!isSeeAllClicked) {
             LazyRow {
                 items(appViewModel.categories) { category ->
-                    CategoryItem(category = category, imageModifier = Modifier.fillMaxSize(), onClick = {
+                    CategoryItem(category = category, onClick = {
                         appViewModel.isChosenCategory.value = true
                         navController.navigate(route = NavigationItems.Search.route)
                     })
@@ -399,7 +400,6 @@ fun FavoritePlaceSection(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val tours = remember { mutableStateListOf<Tour>() }
 
     LaunchedEffect(Unit) {
@@ -423,7 +423,6 @@ fun FavoritePlaceSection(
                 text = stringResource(id = R.string.favorite_place_text),
                 style = Typography.headlineMedium
             )
-            val tourId = ""
             Text(
                 text = stringResource(id = R.string.explore_text),
                 style = Typography.labelSmall,

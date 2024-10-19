@@ -3,7 +3,7 @@ package com.project17.tourbooking.activities.admin
 import ManageAccountsScreen
 import MyTripActivity
 import ProfileActivity
-import YourWishlist
+import WishListScreen
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -50,7 +50,6 @@ class MainActivity : ComponentActivity() {
                     composable("explore") { Explore(navController) }
                     composable("my_trip") { MyTripActivity(SearchViewModel(), navController, AuthViewModel()) }
                     composable("profile") { ProfileActivity(navController, AuthViewModel()) }
-                    composable("wishlist") { YourWishlist(SearchViewModel(), navController) }
                     composable("manage_categories") { ManageCategoriesScreen(navController) }
                     composable("manage_tours") { ManageToursScreen(navController) }
                     composable("edit_tour/{tourId}") { backStackEntry ->

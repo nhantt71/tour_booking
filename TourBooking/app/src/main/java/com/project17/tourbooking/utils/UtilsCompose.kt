@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -37,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
@@ -65,6 +68,7 @@ import com.project17.tourbooking.R
 import com.project17.tourbooking.models.Tour
 import com.project17.tourbooking.models.Category
 import com.project17.tourbooking.models.Review
+import com.project17.tourbooking.models.TourWithId
 import com.project17.tourbooking.navigates.NavigationItems
 import com.project17.tourbooking.ui.theme.BlackLight100
 import com.project17.tourbooking.ui.theme.BlackLight200
@@ -351,14 +355,29 @@ fun CategoryItem(
 }
 
 
-
 @Composable
+fun TourCardInVertical(
+    tour: Tour,
+    navController: NavHostController,
+    context: Context = LocalContext.current
+) {
 
-fun TourCardInVertical(tour: Tour, navController: NavHostController, context: Context){
-    val tourId = "";
+    val toursWithIds = remember { mutableStateListOf<TourWithId>() }
+    val tourId = remember { mutableStateOf("")}
+
+    LaunchedEffect(Unit) {
+        val loadedToursWithIds = FirestoreHelper.loadToursWithIds()
+        toursWithIds.clear()
+        toursWithIds.addAll(loadedToursWithIds)
+
+        val tourWithId = toursWithIds.find { it.tour == tour }
+        if (tourWithId != null) {
+            tourId.value = tourWithId.id
+        }
+    }
+
     Box(
         modifier = Modifier
-            .fillMaxSize()
             .border(
                 width = 1.dp,
                 color = Color.Transparent,
@@ -369,18 +388,18 @@ fun TourCardInVertical(tour: Tour, navController: NavHostController, context: Co
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(onClick = {
-                navController.navigate(NavigationItems.TripDetail.route + "/${tourId}")
+                navController.navigate(NavigationItems.TripDetail.route + "/${tourId.value}")
             })
-    ){
+    ) {
         AsyncImage(
             model = tour.image,
             contentDescription = "Tour Image",
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(200.dp)
         )
-
         AddToWishList(
             initiallyAddedToWishList = false,
             modifier = Modifier
@@ -392,7 +411,8 @@ fun TourCardInVertical(tour: Tour, navController: NavHostController, context: Co
                 .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.Bottom
-        ){
+        ) {
+            Log.d("TourCardInVertical", "Tour name: ${tour.name}")
             Text(
                 text = tour.name,
                 style = Typography.titleLarge,
@@ -423,6 +443,8 @@ fun TourCardInVertical(tour: Tour, navController: NavHostController, context: Co
     }
     Spacer(modifier = Modifier.width(16.dp))
 }
+
+
 
 @Composable
 fun TourSummaryCard(tour: Tour) {
@@ -599,5 +621,25 @@ fun calculateReviewDateDisplay(reviewDate: Timestamp): String {
         months > 0 -> "${months} months ago"
         days > 0 -> "${days} days ago"
         else -> "Today"
+    }
+}
+
+@Composable
+fun LoginPrompt(navController: NavController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Please log in to view your trips.",
+            style = Typography.headlineLarge
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { navController.navigate("login") }) {
+            Text("Login")
+        }
     }
 }

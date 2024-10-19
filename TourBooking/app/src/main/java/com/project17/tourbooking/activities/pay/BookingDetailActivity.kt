@@ -1,13 +1,8 @@
 package com.project17.tourbooking.activities.pay
 
 import android.app.Activity
-import android.content.Intent
-import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,13 +27,16 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,14 +48,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.project17.tourbooking.R
-import com.project17.tourbooking.R.drawable.fuji_mountain
 import com.project17.tourbooking.api.CreateOrder
 import com.project17.tourbooking.constant.CurrencyRate
+import com.project17.tourbooking.models.Bill
+import com.project17.tourbooking.models.BillDetail
+import com.project17.tourbooking.models.Ticket
+import com.project17.tourbooking.models.Tour
 import com.project17.tourbooking.navigates.NavigationItems
 import com.project17.tourbooking.ui.theme.BlackDark900
 import com.project17.tourbooking.ui.theme.BlackLight200
@@ -65,39 +66,93 @@ import com.project17.tourbooking.ui.theme.BlackLight400
 import com.project17.tourbooking.ui.theme.BlackWhite0
 import com.project17.tourbooking.ui.theme.BrandDefault500
 import com.project17.tourbooking.ui.theme.ErrorDefault500
-import com.project17.tourbooking.ui.theme.TourBookingTheme
 import com.project17.tourbooking.ui.theme.Typography
-import com.project17.tourbooking.utils.Tour
+import com.project17.tourbooking.utils.AuthState
+import com.project17.tourbooking.utils.AuthViewModel
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vn.zalopay.sdk.Environment
 import vn.zalopay.sdk.ZaloPayError
 import vn.zalopay.sdk.ZaloPaySDK
 import vn.zalopay.sdk.listeners.PayOrderListener
 
-class BookingDetailActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            TourBookingTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) {innerPadding ->
-                    BookingDetailScreen(modifier = Modifier.padding(innerPadding))
-                }
-            }
-        }
-    }
-}
 
+@OptIn(DelicateCoroutinesApi::class)
 @Composable
-fun BookingDetailScreen(navController: NavHostController = rememberNavController(), tourId: String = "", modifier: Modifier = Modifier){
-    var tour = Tour("Fuji Mountain", fuji_mountain, 4.5, "Japan", 1.0, true)
-    var customerName by remember { mutableStateOf("Pristina") }
-    var contactInfo by remember { mutableStateOf("example@gmail.com") }
+fun BookingDetailScreen(
+    navController: NavHostController, tourId: String,
+    modifier: Modifier = Modifier, authViewModel: AuthViewModel = AuthViewModel()
+) {
+    val tour = remember { mutableStateOf<Tour?>(null) }
+    var customerName by remember { mutableStateOf("") }
+    var contactInfo by remember { mutableStateOf("") }
     var quantity by remember { mutableIntStateOf(1) }
 
+    val ticket = remember { mutableStateListOf<Ticket?>() }
+    var ticketDocumentId by remember { mutableStateOf<String?>(null) }
+
     val context = LocalContext.current
-    var token by remember { mutableStateOf("") }
+
+    val authState = authViewModel.authState.observeAsState()
+    var slotQuantity by remember { mutableIntStateOf(0) }
+
+    val success = remember { mutableStateOf(false) }
+    var billid1 = remember { mutableStateOf("") }
+
+    val scope = rememberCoroutineScope()
+
+
+    LaunchedEffect(authState.value) {
+        when (authState.value) {
+            is AuthState.Authenticated -> {
+                val currentUser = authViewModel.auth.currentUser
+                val currentEmail = currentUser?.email
+
+                if (currentEmail != null) {
+                    FirestoreHelper.getCustomerByEmail(currentEmail) { customer ->
+                        customer?.let {
+                            customerName = it.fullName
+                            contactInfo = it.email
+                        }
+                    }
+                }
+
+                tour.value = FirestoreHelper.getTourById(tourId)
+
+                slotQuantity = tour.value?.slotQuantity ?: 0
+
+                val loadedTickets = FirestoreHelper.loadTicketForTour(tourId)
+                ticket.clear()
+                ticket.addAll(loadedTickets)
+
+                val firstTicket = ticket.firstOrNull()
+                if (firstTicket != null) {
+                    FirestoreHelper.getTicketDocumentId(firstTicket.tourId) { documentId ->
+                        if (documentId != null) {
+                            ticketDocumentId = documentId
+                            Log.d("BookingDetailScreen", "Ticket Document ID: $ticketDocumentId")
+                        }
+                    }
+                }
+                Log.d("BookingDetailScreen", "Slot quantity: $slotQuantity")
+
+            }
+
+            is AuthState.Error -> {
+                val errorMessage = (authState.value as AuthState.Error).message
+                Log.e("BookingDetailScreen", errorMessage)
+            }
+
+            is AuthState.Unauthenticated -> {
+                navController.navigate("login")
+            }
+
+            else -> Unit
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -105,59 +160,135 @@ fun BookingDetailScreen(navController: NavHostController = rememberNavController
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Spacer(modifier = Modifier
-                .height(16.dp)
-                .fillMaxWidth())
+            Spacer(
+                modifier = Modifier
+                    .height(16.dp)
+                    .fillMaxWidth()
+            )
 
             NavBarSection(navController)
-            Spacer(modifier = Modifier
-                .height(32.dp)
-                .fillMaxWidth())
+            Spacer(
+                modifier = Modifier
+                    .height(32.dp)
+                    .fillMaxWidth()
+            )
             BookingForm(
                 customerName = customerName,
                 contactInfo = contactInfo,
                 onCustomerNameChanged = { customerName = it },
                 onContactInfoChanged = { contactInfo = it },
-                onQuantityChanged = { quantity = it + 1 }
+                onQuantityChanged = { quantity = it },
+                slotQuantity = slotQuantity
             )
         }
 
         FooterSection(
-            tour = tour,
+            price = ticket.firstOrNull()?.price ?: 0.0,
             quantity = quantity,
             onConfirmClick = {
                 ZaloPaySDK.init(554, Environment.SANDBOX)
                 val orderApi = CreateOrder()
-                GlobalScope.launch {
-                    Log.d("adfsf", "afdsfsa")
+                Log.d("asd", "ok")
+                scope.launch {
                     try {
-                        val data = orderApi.createOrder((tour.price.toInt() * quantity  * CurrencyRate.VND).toString())
-                        token = data?.getString("zp_trans_token") ?: ""
-                        Log.d("token_test", "$token")
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                    if (token.isNotEmpty()) {
-                        ZaloPaySDK.getInstance().payOrder(
-                            context as Activity,
-                            token,
-                            "demozpdk://app",
-                            object : PayOrderListener {
-                                override fun onPaymentCanceled(zpTransToken: String?, appTransID: String?) {
-                                    //Xử lý logic khi người dùng từ chối thanh toán
-                                }
-                                override fun onPaymentError(zaloPayError: ZaloPayError?, zpTransToken: String?, appTransID: String?) {
-                                    if(zaloPayError == ZaloPayError.PAYMENT_APP_NOT_FOUND){
-                                        ZaloPaySDK.getInstance().navigateToZaloOnStore(context)
-                                        ZaloPaySDK.getInstance().navigateToZaloPayOnStore(context)
+                        val data = orderApi.createOrder(
+                            ((ticket.firstOrNull()?.price
+                                ?: 0.0).toInt() * quantity * CurrencyRate.VND).toString()
+                        )
+                        val code = data.getString("return_code")
+                        if (code == "1") {
+                            val token = data.getString("zp_trans_token")
+                            ZaloPaySDK.getInstance().payOrder(
+                                context as Activity,
+                                token,
+                                "demozpdk://app",
+                                object : PayOrderListener {
+                                    override fun onPaymentCanceled(
+                                        zpTransToken: String?,
+                                        appTransID: String?
+                                    ) {
+                                        //Xử lý logic khi người dùng từ chối thanh toán
+                                    }
+
+                                    override fun onPaymentError(
+                                        zaloPayError: ZaloPayError?,
+                                        zpTransToken: String?,
+                                        appTransID: String?
+                                    ) {
+                                        if (zaloPayError == ZaloPayError.PAYMENT_APP_NOT_FOUND) {
+                                            ZaloPaySDK.getInstance().navigateToZaloOnStore(context)
+                                            ZaloPaySDK.getInstance()
+                                                .navigateToZaloPayOnStore(context)
+                                        }
+                                    }
+
+                                    override fun onPaymentSucceeded(
+                                        transactionId: String,
+                                        transToken: String,
+                                        appTransID: String?
+                                    ) {
+                                        val bill = Bill(
+                                            totalAmount = quantity * (ticket.firstOrNull()?.price
+                                                ?: 0.0),
+                                            email = contactInfo
+                                        )
+                                        scope.launch {
+                                            try {
+                                                val billId = FirestoreHelper.addBill(bill)
+                                                Log.d("BookingDetailScreen", "Bill ID: $billId")
+
+                                                if (billId != null) {
+                                                    val billDetail = ticketDocumentId?.let {
+                                                        BillDetail(
+                                                            ticketId = it,
+                                                            quantity = quantity,
+                                                            billId = billId
+                                                        )
+                                                    }
+
+                                                    billid1.value = billId
+
+                                                    if (billDetail != null) {
+                                                        val isSuccess =
+                                                            FirestoreHelper.addBillDetail(billDetail)
+                                                        success.value = true
+                                                        withContext(Dispatchers.Main) {
+                                                            if (isSuccess) {
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Thanh toán và lưu thông tin thành công!",
+                                                                    Toast.LENGTH_LONG
+                                                                ).show()
+                                                                navController.navigate(NavigationItems.BookingSuccess.route + "/${billid1.value}")
+                                                            } else {
+                                                                Toast.makeText(
+                                                                    context,
+                                                                    "Lỗi khi lưu BillDetail",
+                                                                    Toast.LENGTH_LONG
+                                                                ).show()
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    withContext(Dispatchers.Main) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Lỗi không có BillID",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
                                     }
                                 }
-                                override fun onPaymentSucceeded(transactionId: String, transToken: String, appTransID: String?) {
-                                    //Xử lý logic khi thanh toán thành công
-                                    navController.navigate(NavigationItems.Home.route)
-                                }
-                            }
-                        )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        Log.e("ZaloPayError", "Exception: ${e.message}")
                     }
                 }
             },
@@ -168,8 +299,8 @@ fun BookingDetailScreen(navController: NavHostController = rememberNavController
 
 @Composable
 fun NavBarSection(
-    navController: NavHostController = rememberNavController()
-){
+    navController: NavController = rememberNavController()
+) {
     Row(
         Modifier
             .fillMaxWidth(),
@@ -201,13 +332,15 @@ fun BookingForm(
     contactInfo: String,
     onCustomerNameChanged: (String) -> Unit,
     onContactInfoChanged: (String) -> Unit,
-    onQuantityChanged: (Int) -> Unit
-){
-    //TODO: load customer's name from account
+    onQuantityChanged: (Int) -> Unit,
+    slotQuantity: Int
+) {
     var showErrorName by remember { mutableStateOf(false) }
     var showErrorContact by remember { mutableStateOf(false) }
     var errorMessageName by remember { mutableStateOf<String?>(null) }
     var errorMessageContact by remember { mutableStateOf<String?>(null) }
+
+    val validSlotQuantity = if (slotQuantity > 0) slotQuantity else 1
 
     Column {
         InformationTextField(
@@ -224,7 +357,6 @@ fun BookingForm(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        //TODO: load customer's email from account
         InformationTextField(
             label = R.string.contact_info_text,
             value = contactInfo,
@@ -241,15 +373,15 @@ fun BookingForm(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        //TODO: get maxium slot can book and put in maxMembers
-        val maxMembers = 10
-        val dropdownList = (1..maxMembers).map { "$it " + stringResource(id = R.string.member_text) }
+        val dropdownList =
+            (1..validSlotQuantity).map { "$it " + stringResource(id = R.string.member_text) }
         DropdownMenuWithOptions(
             options = dropdownList,
-            onOptionSelected = {newValue -> onQuantityChanged(newValue)}
+            onOptionSelected = { newValue -> onQuantityChanged(newValue + 1) }
         )
     }
 }
+
 
 @Composable
 fun InformationTextField(
@@ -260,6 +392,8 @@ fun InformationTextField(
     showError: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text
 ) {
+
+
     Column {
         OutlinedTextField(
             value = value,
@@ -295,9 +429,9 @@ fun InformationTextField(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DropdownMenuWithOptions(options: List<String>,  onOptionSelected: (Int) -> Unit) {
+fun DropdownMenuWithOptions(options: List<String>, onOptionSelected: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    var selectedOptionText by remember { mutableStateOf(options[0]) }
+    var selectedOptionText by remember { mutableStateOf(options.getOrElse(0) { "No options available" }) }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -333,16 +467,24 @@ fun DropdownMenuWithOptions(options: List<String>,  onOptionSelected: (Int) -> U
             modifier = Modifier
                 .background(BlackWhite0)
         ) {
-            options.forEachIndexed { index, selectionOption ->
+            if (options.isEmpty()) {
                 DropdownMenuItem(
-                    text = { Text(text = selectionOption) },
-                    onClick = {
-                        selectedOptionText = selectionOption
-                        expanded = false
-                        onOptionSelected(index)
-                    },
+                    text = { Text(text = "No options available") },
+                    onClick = { expanded = false },
                     modifier = Modifier.padding(8.dp)
                 )
+            } else {
+                options.forEachIndexed { index, selectionOption ->
+                    DropdownMenuItem(
+                        text = { Text(text = selectionOption) },
+                        onClick = {
+                            selectedOptionText = selectionOption
+                            expanded = false
+                            onOptionSelected(index)
+                        },
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
         }
     }
@@ -351,35 +493,37 @@ fun DropdownMenuWithOptions(options: List<String>,  onOptionSelected: (Int) -> U
 
 @Composable
 fun FooterSection(
-    tour: Tour,
+    price: Double,
     quantity: Int,
     onConfirmClick: () -> Unit,
     modifier: Modifier
-){
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .background(BlackWhite0),
         verticalAlignment = Alignment.CenterVertically
-    ){
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically){
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = stringResource(id = R.string.total_text),
                     color = BlackLight400,
-                    style = Typography.bodyLarge)
+                    style = Typography.bodyLarge
+                )
 
                 Spacer(modifier = Modifier.width(8.dp))
 
                 Text(
-                    text = String.format("$%.2f", tour.price * quantity),
+                    text = String.format("$%.2f", (price * quantity)),
                     style = Typography.headlineMedium,
-                    color = ErrorDefault500)
+                    color = ErrorDefault500
+                )
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -389,7 +533,7 @@ fun FooterSection(
                 colors = ButtonColors(BrandDefault500, BlackDark900, BrandDefault500, BlackDark900),
                 modifier = Modifier
                     .width(150.dp)
-            ){
+            ) {
                 Text(
                     text = stringResource(id = R.string.confirm_text),
                     style = Typography.titleLarge,
@@ -397,14 +541,5 @@ fun FooterSection(
                 )
             }
         }
-    }
-}
-
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview5() {
-    TourBookingTheme {
-        BookingDetailScreen()
     }
 }

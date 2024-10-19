@@ -1,7 +1,9 @@
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
@@ -12,6 +14,9 @@ import com.project17.tourbooking.models.*
 import kotlinx.coroutines.tasks.await
 import org.mindrot.jbcrypt.BCrypt
 import java.util.UUID
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 
 
 object FirestoreHelper {
@@ -33,6 +38,169 @@ object FirestoreHelper {
             null
         }
     }
+
+    fun getBillById(billId: String, callback: (Bill?) -> Unit) {
+        db.collection("bills").document(billId).get()
+            .addOnSuccessListener { document ->
+                if (document != null) {
+                    val bill = document.toObject(Bill::class.java)
+                    callback(bill)
+                } else {
+                    callback(null)
+                }
+            }
+            .addOnFailureListener {
+                callback(null)
+            }
+    }
+
+    fun getBillDetailsByBillId1(billId: String, callback: (List<BillDetail>) -> Unit) {
+        db.collection("billDetails")
+            .whereEqualTo("billId", billId)
+            .get()
+            .addOnSuccessListener { result ->
+                val billDetails = result.mapNotNull { document ->
+                    document.toObject(BillDetail::class.java)
+                }
+                callback(billDetails)
+            }
+            .addOnFailureListener {
+                callback(emptyList())
+            }
+    }
+
+    fun getTicketDocumentId(tourId: String, callback: (String?) -> Unit) {
+        val db = FirebaseFirestore.getInstance()
+
+        // Truy vấn Firestore để tìm tài liệu có `tourId` mong muốn
+        db.collection("tickets")
+            .whereEqualTo("tourId", tourId)
+            .limit(1) // Lấy tài liệu đầu tiên nếu có nhiều kết quả
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                if (!querySnapshot.isEmpty) {
+                    // Lấy id của tài liệu đầu tiên
+                    val documentId = querySnapshot.documents[0].id
+                    callback(documentId)
+                } else {
+                    // Không tìm thấy tài liệu phù hợp
+                    callback(null)
+                }
+            }
+            .addOnFailureListener { exception ->
+                // Xử lý lỗi
+                Log.e("FirestoreHelper", "Error getting ticket document ID", exception)
+                callback(null)
+            }
+    }
+
+    fun getBillDetailByBillId(billId: String, onComplete: (BillDetail?) -> Unit) {
+        db.collection("billDetails")
+            .whereEqualTo("billId", billId)
+            .limit(1)  // Assuming one BillDetail per Bill, adjust if needed
+            .get()
+            .addOnSuccessListener { documents ->
+                if (!documents.isEmpty) {
+                    val billDetail = documents.documents[0].toObject(BillDetail::class.java)
+                    onComplete(billDetail)
+                } else {
+                    onComplete(null)
+                }
+            }
+            .addOnFailureListener { exception ->
+                Log.e("FirestoreHelper", "Error getting bill detail: $exception")
+                onComplete(null)
+            }
+    }
+
+
+    fun getTourIdByTicketId(ticketId: String, onSuccess: (String?) -> Unit) {
+        val db = FirebaseFirestore.getInstance()
+        val ticketsCollection = db.collection("tickets")
+
+        ticketsCollection
+            .whereEqualTo("ticketId", ticketId)
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                val tourId = querySnapshot.documents.firstOrNull()?.getString("tourId")
+                onSuccess(tourId)
+            }
+            .addOnFailureListener { exception ->
+                Log.e("FirestoreHelper", "Error getting tourId by ticketId", exception)
+                onSuccess(null)
+            }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun Date.toLocalDate(): LocalDate {
+        return this.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+    }
+
+
+    suspend fun getOrdersByUser(): Map<String, Int> {
+        val bills = FirebaseFirestore.getInstance().collection("bills").get().await()
+        val userOrderCount = mutableMapOf<String, Int>()
+
+        for (document in bills.documents) {
+            val email = document.getString("email") ?: continue
+            userOrderCount[email] = userOrderCount.getOrDefault(email, 0) + 1
+        }
+
+        return userOrderCount
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    suspend fun getOrdersByDate(): Map<String, Int> {
+        val bills = FirebaseFirestore.getInstance().collection("bills").get().await()
+        val dateOrderCount = mutableMapOf<String, Int>()
+
+        for (document in bills.documents) {
+            val createdDate = document.getTimestamp("createdDate")?.toDate()?.toLocalDate() ?: continue
+            val date = createdDate.toString()
+            dateOrderCount[date] = dateOrderCount.getOrDefault(date, 0) + 1
+        }
+
+        return dateOrderCount
+    }
+
+    suspend fun getOrdersByCategory(): Map<String, Int> {
+        val billDetails = FirebaseFirestore.getInstance().collection("billDetails").get().await()
+        val tickets = FirebaseFirestore.getInstance().collection("tickets").get().await()
+
+        val categoryOrderCount = mutableMapOf<String, Int>()
+        val ticketCategoryMap = tickets.documents.associateBy { it.id }.mapValues { it.value.getString("categoryId") ?: "" }
+
+        for (document in billDetails.documents) {
+            val ticketId = document.getString("ticketId") ?: continue
+            val categoryId = ticketCategoryMap[ticketId] ?: continue
+            categoryOrderCount[categoryId] = categoryOrderCount.getOrDefault(categoryId, 0) + 1
+        }
+
+        return categoryOrderCount
+    }
+
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    suspend fun getOrdersByMonth(): Map<String, Int> {
+        val bills = FirebaseFirestore.getInstance().collection("bills").get().await()
+        val monthOrderCount = mutableMapOf<String, Int>()
+
+        for (document in bills.documents) {
+            val createdDate = document.getTimestamp("createdDate")?.toDate()?.toLocalDate() ?: continue
+            val month = "${createdDate.year}-${createdDate.monthValue}"
+            monthOrderCount[month] = monthOrderCount.getOrDefault(month, 0) + 1
+        }
+
+        return monthOrderCount
+    }
+
+    suspend fun getTopSellingCategories(limit: Int): List<String> {
+        val ordersByCategory = getOrdersByCategory()
+        val sortedCategories = ordersByCategory.entries.sortedByDescending { it.value }
+        return sortedCategories.take(limit).map { it.key }
+    }
+
+
 
     fun deleteBillsAndDetails(billIds: List<String>, callback: (Boolean, Exception?) -> Unit) {
         val batch = FirebaseFirestore.getInstance().batch()
@@ -308,15 +476,16 @@ object FirestoreHelper {
         }
     }
 
-    suspend fun addBill(bill: Bill): Result<Unit> {
+    suspend fun addBill(bill: Bill): String? {
         return try {
-            val newDocRef = db.collection("bills").document()
-            bill.copy().let {
-                newDocRef.set(it).await()
-            }
-            Result.success(Unit)
+            val billRef = FirebaseFirestore.getInstance().collection("bills").add(bill).await()
+            val billId = billRef.id
+            // Cập nhật bill với ID của chính nó
+            FirebaseFirestore.getInstance().collection("bills").document(billId).update("id", billId).await()
+            billId
         } catch (e: Exception) {
-            Result.failure(e)
+            Log.e("FirestoreHelper", "Error adding Bill: ${e.message}")
+            null
         }
     }
 
@@ -424,18 +593,14 @@ object FirestoreHelper {
         }
     }
 
-    suspend fun addBillDetail(billDetail: BillDetail): Result<Unit> {
+    suspend fun addBillDetail(billDetail: BillDetail): Boolean {
         return try {
-            val newDocRef = db.collection("bill_details").document()
-            billDetail.copy().let {
-                newDocRef.set(it).await()
-            }
-            Result.success(Unit)
+            db.collection("billDetails").add(billDetail).await()
+            true // Success
         } catch (e: Exception) {
-            Result.failure(e)
+            false // Failure
         }
     }
-
     suspend fun updateBillDetail(docId: String, billDetail: BillDetail): Result<Unit> {
         return try {
             db.collection("bill_details").document(docId).set(billDetail).await()

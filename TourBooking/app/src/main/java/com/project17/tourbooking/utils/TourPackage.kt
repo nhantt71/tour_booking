@@ -12,7 +12,8 @@ data class TourPackage(
     val price: Double,
     val averageRating: Double,
     val description: String,
-    val categoryId: String = ""
+    val categoryId: String = "",
+    val tourId: String = ""
 )
 
 fun createTourPackages(
@@ -42,7 +43,8 @@ fun createTourPackages(
             price = ticket?.price ?: 0.0,
             averageRating = averageRating,
             description = LoremIpsum(10).values.joinToString(" "),
-            categoryId = tour.categoryId
+            categoryId = tour.categoryId,
+            tourId = tourWithId.id
         )
     }
 }

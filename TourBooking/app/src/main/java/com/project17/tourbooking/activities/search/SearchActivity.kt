@@ -84,7 +84,6 @@ fun SearchScreen(
     val reviews = remember { mutableStateListOf<Review>() }
     val tickets = remember { mutableStateListOf<Ticket>() }
 
-    // Load data from Firestore
     LaunchedEffect(Unit) {
         val loadedToursWithIds = FirestoreHelper.loadToursWithIds()
         val loadedCategories = FirestoreHelper.loadCategories()

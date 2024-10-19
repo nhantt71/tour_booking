@@ -24,6 +24,7 @@ import com.project17.tourbooking.R
 import com.project17.tourbooking.ui.theme.Typography
 import com.project17.tourbooking.utils.AuthState
 import com.project17.tourbooking.utils.AuthViewModel
+import com.project17.tourbooking.utils.LoginPrompt
 
 @Composable
 fun ProfileActivity(navController: NavController, authViewModel: AuthViewModel) {
@@ -53,136 +54,142 @@ fun ProfileActivity(navController: NavController, authViewModel: AuthViewModel) 
                     }
                 }
             }
+
             is AuthState.Error -> {
                 val errorMessage = (authState.value as AuthState.Error).message
                 Log.e("ProfileActivity", errorMessage)
             }
+
             is AuthState.Unauthenticated -> {
-                navController.navigate("login")
             }
+
             else -> Unit
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-    ) {
-
-        Spacer(modifier = Modifier.height(50.dp))
-
-        Text(
-            text = "List Your Trip",
-            style = Typography.headlineLarge,
-            modifier = Modifier.padding(start = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
+    if (authState.value is AuthState.Unauthenticated) {
+        LoginPrompt(navController)
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
         ) {
-            // Use Coil to load the image from the URL
-            Image(
-                painter = rememberImagePainter(
-                    data = avatarUrl,
-                    builder = {
-                        placeholder(R.drawable.avatar_placeholder)
-                        error(R.drawable.avatar_placeholder)
-                    }
-                ),
-                contentDescription = "Avatar",
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
+
+            Spacer(modifier = Modifier.height(50.dp))
+
+            Text(
+                text = "List Your Trip",
+                style = Typography.headlineLarge,
+                modifier = Modifier.padding(start = 16.dp)
             )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Column {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Hello, $name", style = Typography.headlineSmall)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("Address: $address", style = Typography.bodyMedium)
-            }
-        }
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Use Coil to load the image from the URL
+                Image(
+                    painter = rememberImagePainter(
+                        data = avatarUrl,
+                        builder = {
+                            placeholder(R.drawable.avatar_placeholder)
+                            error(R.drawable.avatar_placeholder)
+                        }
+                    ),
+                    contentDescription = "Avatar",
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                )
 
-        Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.width(16.dp))
 
-        ProfileCard(
-            "Personal Information",
-            R.drawable.ic_person,
-            onClick = { navController.navigate("personal_information") })
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ProfileCard(
-            "Notification",
-            R.drawable.ic_notification,
-            onClick = { navController.navigate("notification") })
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ProfileCard("FAQ", R.drawable.ic_help, onClick = { navController.navigate("faq") })
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ProfileCard(
-            "Language",
-            R.drawable.ic_language,
-            onClick = { navController.navigate("language") })
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        ProfileCard("Logout", R.drawable.ic_logout) {
-            showLogoutDialog = true
-        }
-
-        if (showLogoutDialog) {
-            AlertDialog(
-                onDismissRequest = { showLogoutDialog = false },
-                title = {
-                    Text(
-                        text = "Logout",
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                        style = Typography.titleLarge
-                    )
-                },
-                text = {
-                    Text(
-                        text = buildAnnotatedString {
-                            append("Are you sure you want to log out of ")
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                append(name)
-                            }
-                            append("'s account?")
-                        },
-                        style = Typography.bodyLarge
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            authViewModel.signOut()
-                            navController.navigate("login")
-                            showLogoutDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFCD240))
-                    ) {
-                        Text("Logout")
-                    }
-                },
-                dismissButton = {
-                    Button(
-                        onClick = { showLogoutDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
-                    ) {
-                        Text("Cancel")
-                    }
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Hello, $name", style = Typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Address: $address", style = Typography.bodyMedium)
                 }
-            )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ProfileCard(
+                "Personal Information",
+                R.drawable.ic_person,
+                onClick = { navController.navigate("personal_information") })
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ProfileCard(
+                "Notification",
+                R.drawable.ic_notification,
+                onClick = { navController.navigate("notification") })
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ProfileCard("FAQ", R.drawable.ic_help, onClick = { navController.navigate("faq") })
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ProfileCard(
+                "Language",
+                R.drawable.ic_language,
+                onClick = { navController.navigate("language") })
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ProfileCard("Logout", R.drawable.ic_logout) {
+                showLogoutDialog = true
+            }
+
+            if (showLogoutDialog) {
+                AlertDialog(
+                    onDismissRequest = { showLogoutDialog = false },
+                    title = {
+                        Text(
+                            text = "Logout",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            style = Typography.titleLarge
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = buildAnnotatedString {
+                                append("Are you sure you want to log out of ")
+                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append(name)
+                                }
+                                append("'s account?")
+                            },
+                            style = Typography.bodyLarge
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                authViewModel.signOut()
+                                navController.navigate("home")
+                                showLogoutDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFCD240))
+                        ) {
+                            Text("Logout")
+                        }
+                    },
+                    dismissButton = {
+                        Button(
+                            onClick = { showLogoutDialog = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
         }
     }
 }

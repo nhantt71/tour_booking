@@ -16,57 +16,8 @@
         android:theme="@style/Theme.TourBooking"
         tools:targetApi="31">
         <activity
-            android:name=".activities.pay.BookingSuccessActivity"
-            android:exported="false"
-            android:label="@string/title_activity_booking_success"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.pay.BookingDetailActivity"
-            android:exported="true"
-            android:label="@string/title_activity_pay_detail"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.search.SearchFilterActivity"
-            android:exported="false"
-            android:label="FilterActivity"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.search.SearchActivity"
-            android:exported="false"
-            android:label="@string/title_activity_search"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.tripdetail.TripDetailActivity"
-            android:exported="false"
-            android:label="@string/title_activity_trip_detail"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.home.HomeActivity"
-            android:exported="false"
-            android:label="@string/title_activity_wish_list"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.profile.ProfileActivity"
-            android:exported="false"
-            android:label="@string/title_activity_profile"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.wishlist.WishListActivity"
-            android:exported="false"
-            android:label="@string/title_activity_wish_list"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.mytrip.MyTripActivity"
-            android:exported="false"
-            android:label="@string/title_activity_my_trip"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
             android:name=".activities.MainActivity"
-            android:exported="false"
-            android:label="Admin"
-            android:theme="@style/Theme.TourBooking" />
-        <activity
-            android:name=".activities.admin.MainActivity"
+            android:launchMode="singleTask"
             android:exported="true"
             android:label="Admin"
             android:theme="@style/Theme.TourBooking">
@@ -75,12 +26,14 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="demozpdk"
+                    android:host="app" />
+            </intent-filter>
         </activity>
-        <activity
-            android:name=".activities.admin.MainActivity"
-            android:exported="true"
-            android:label="@string/title_activity_main"
-            android:theme="@style/Theme.TourBooking"></activity>
     </application>
 
 </manifest>

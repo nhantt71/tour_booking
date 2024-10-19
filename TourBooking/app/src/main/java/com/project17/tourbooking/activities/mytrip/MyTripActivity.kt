@@ -16,10 +16,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -32,8 +34,10 @@ import com.project17.tourbooking.activities.search.SearchViewModel
 import com.project17.tourbooking.models.Review
 import com.project17.tourbooking.ui.theme.Typography
 import com.project17.tourbooking.models.Tour
+import com.project17.tourbooking.navigates.NavigationItems
 import com.project17.tourbooking.utils.AuthState
 import com.project17.tourbooking.utils.AuthViewModel
+import com.project17.tourbooking.utils.LoginPrompt
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -46,8 +50,9 @@ fun MyTripActivity(searchViewModel: SearchViewModel, navController: NavControlle
     val tours = remember { mutableStateListOf<Pair<String, Tour>>() }
     val filteredTours = remember { mutableStateListOf<Pair<String, Tour>>() }
     val tourToBillIds = remember { mutableMapOf<String, List<String>>() } // Add this line
+    var refreshNeeded by remember { mutableStateOf(false) } // Add this line
 
-    LaunchedEffect(authState.value, searchViewModel.inputValue.value) {
+    LaunchedEffect(authState.value, searchViewModel.inputValue.value, refreshNeeded) {
         when (authState.value) {
             is AuthState.Authenticated -> {
                 val currentUser = authViewModel.auth.currentUser
@@ -96,41 +101,56 @@ fun MyTripActivity(searchViewModel: SearchViewModel, navController: NavControlle
                 Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
             }
             is AuthState.Unauthenticated -> {
-                navController.navigate("login")
+                // No action needed here; handled in the composable body
             }
             else -> Unit
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(50.dp))
-
-        Text(
-            text = "Your Tours",
-            style = Typography.headlineLarge,
-            modifier = Modifier.padding(start = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        SearchBarSection(searchViewModel)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+    // Display login prompt if unauthenticated
+    if (authState.value is AuthState.Unauthenticated) {
+        LoginPrompt(navController)
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            items(filteredTours) { (documentId, tour) ->
-                val billIds = tourToBillIds[documentId] ?: emptyList() // Fetch the bill IDs for this tour
-                TourItem(tour = tour, documentId = documentId, navController = navController, authViewModel = authViewModel, billIds = billIds)
+            Spacer(modifier = Modifier.height(50.dp))
+
+            Text(
+                text = "Your Tours",
+                style = Typography.headlineLarge,
+                modifier = Modifier.padding(start = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SearchBarSection(searchViewModel)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(filteredTours) { (documentId, tour) ->
+                    val billIds = tourToBillIds[documentId] ?: emptyList() // Fetch the bill IDs for this tour
+                    TourItem(
+                        tour = tour,
+                        documentId = documentId,
+                        navController = navController,
+                        authViewModel = authViewModel,
+                        billIds = billIds,
+                        onTourCanceled = {
+                            refreshNeeded = !refreshNeeded
+                        }
+                    )
+                }
             }
         }
     }
 }
+
 
 
 
@@ -157,11 +177,12 @@ fun TourItem(
     documentId: String,
     navController: NavController,
     authViewModel: AuthViewModel,
-    billIds: List<String> // Add this parameter
+    billIds: List<String>,
+    onTourCanceled: () -> Unit // Add this parameter
 ) {
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
-    var rating by remember { mutableStateOf(0f) }
+    var rating by remember { mutableFloatStateOf(0f) }
     var comment by remember { mutableStateOf("") }
 
     val startDate = tour.startDate
@@ -177,7 +198,7 @@ fun TourItem(
                 val email = authViewModel.currentUserEmail ?: ""
                 if (email.isNotEmpty()) {
                     val review = Review(
-                        rating = (rating * 10).toInt() / 10.0, // Round to 1 decimal place
+                        rating = (rating * 10).toInt() / 10.0,
                         comment = comment,
                         email = email,
                         tourId = documentId
@@ -206,7 +227,7 @@ fun TourItem(
             .fillMaxWidth()
             .padding(16.dp)
             .clickable {
-                navController.navigate("tourDetail/$documentId")
+                navController.navigate(NavigationItems.TripBookedDetail.route + "/${billIds.first()}")
             },
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color.LightGray)
@@ -240,6 +261,7 @@ fun TourItem(
                                 FirestoreHelper.deleteBillsAndDetails(billIds) { success, exception ->
                                     if (success) {
                                         Toast.makeText(context, "Tour canceled successfully", Toast.LENGTH_SHORT).show()
+                                        onTourCanceled() // Call the callback to refresh the page
                                     } else {
                                         val errorMessage = exception?.localizedMessage ?: "Failed to cancel tour"
                                         Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
@@ -264,7 +286,6 @@ fun TourItem(
         }
     }
 }
-
 
 
 @Composable

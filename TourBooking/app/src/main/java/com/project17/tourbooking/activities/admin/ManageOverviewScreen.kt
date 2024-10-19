@@ -72,7 +72,7 @@ fun ManageOverviewScreen(navController: NavController, authViewModel: AuthViewMo
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(onClick = { navController.navigate("statistic_report") }) {
+            Button(onClick = { navController.navigate("statistic") }) {
                 Text("Statistic Report")
             }
 

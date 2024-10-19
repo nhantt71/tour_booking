@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +25,9 @@ import com.project17.tourbooking.R
 import com.project17.tourbooking.activities.search.SearchBarSection
 import com.project17.tourbooking.activities.search.SearchViewModel
 import com.project17.tourbooking.ui.theme.Typography
+import com.project17.tourbooking.utils.AuthState
+import com.project17.tourbooking.utils.AuthViewModel
+import com.project17.tourbooking.utils.LoginPrompt
 
 data class WishlistItem(
     val id: Int,
@@ -35,7 +39,8 @@ data class WishlistItem(
 )
 
 @Composable
-fun WishListScreen(searchViewModel: SearchViewModel = viewModel(), navController: NavController) {
+fun WishListScreen(searchViewModel: SearchViewModel = viewModel(), navController: NavController, authViewModel: AuthViewModel) {
+    val authState = authViewModel.authState.observeAsState()
     val wishlistItems =
         remember {
             listOf(
@@ -66,34 +71,38 @@ fun WishListScreen(searchViewModel: SearchViewModel = viewModel(), navController
             )
         }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(50.dp))
-
-        Text(
-            text = "List Your Trip",
-            style = Typography.headlineLarge,
-            modifier = Modifier.padding(start = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        SearchBarSection(searchViewModel)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
+    if (authState.value is AuthState.Unauthenticated) {
+        LoginPrompt(navController)
+    } else {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 16.dp, end = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(16.dp)
         ) {
-            items(wishlistItems) { item ->
-                WishlistItem(item, onRemoveFromWishlist = { /* Xử lý bỏ yêu thích */ }) {
-                    navController.navigate("login")
+            Spacer(modifier = Modifier.height(50.dp))
+
+            Text(
+                text = "List Your Trip",
+                style = Typography.headlineLarge,
+                modifier = Modifier.padding(start = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SearchBarSection(searchViewModel)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 16.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(wishlistItems) { item ->
+                    WishlistItem(item, onRemoveFromWishlist = { /* Xử lý bỏ yêu thích */ }) {
+                        navController.navigate("login")
+                    }
                 }
             }
         }
